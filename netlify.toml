@@ -1,0 +1,50 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# API routes - redirect to Netlify Functions
+# Netlify Functions are accessible at /.netlify/functions/function-name
+# We redirect /api/* to the appropriate function
+[[redirects]]
+  from = "/api/auth/signup"
+  to = "/.netlify/functions/auth"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/login"
+  to = "/.netlify/functions/auth"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/me"
+  to = "/.netlify/functions/auth"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/text-to-voice"
+  to = "/.netlify/functions/text-to-voice"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/history"
+  to = "/.netlify/functions/text-to-voice"
+  status = 200
+  force = true
+
+# Redirect all routes to index.html for SPA
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["server/**"]
+
