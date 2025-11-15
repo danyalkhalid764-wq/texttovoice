@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import axios from 'axios';
 import db from './database.js';
 import { createUser, getUserByEmail, comparePassword, generateToken, verifyToken } from './auth.js';
 
@@ -120,8 +121,8 @@ app.get('/api/me', authenticateToken, (req, res) => {
   }
 });
 
-// Text to voice endpoint
-app.post('/api/text-to-voice', authenticateToken, (req, res) => {
+// Text to voice endpoint with LemonFox API
+app.post('/api/text-to-voice', authenticateToken, async (req, res) => {
   try {
     const { text } = req.body;
 
@@ -129,16 +130,56 @@ app.post('/api/text-to-voice', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    // Store in history (optional)
+    const lemonfoxApiKey = process.env.LEMONFOX_API_KEY;
+    if (!lemonfoxApiKey) {
+      return res.status(500).json({ error: 'LemonFox API key not configured' });
+    }
+
+    // Store in history
     const stmt = db.prepare('INSERT INTO text_to_voice_history (user_id, text) VALUES (?, ?)');
     stmt.run(req.userId, text);
 
-    // Return success - actual voice synthesis will be done on client side
-    // or you can use a TTS service here
-    res.json({
-      message: 'Text ready for voice conversion',
-      text: text.trim()
-    });
+    try {
+      // Call LemonFox API
+      // Adjust the endpoint URL based on LemonFox's actual API documentation
+      const lemonfoxResponse = await axios.post(
+        'https://api.lemonfox.ai/v1/tts', // Common endpoint pattern - adjust if needed
+        {
+          text: text.trim(),
+          voice: 'default', // Adjust voice parameter as needed
+          speed: 1.0,
+          format: 'mp3'
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${lemonfoxApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'arraybuffer' // For audio binary data
+        }
+      );
+
+      // Convert audio buffer to base64 for frontend
+      const audioBase64 = Buffer.from(lemonfoxResponse.data).toString('base64');
+      const audioMimeType = lemonfoxResponse.headers['content-type'] || 'audio/mpeg';
+
+      res.json({
+        message: 'Text converted to voice successfully',
+        audio: `data:${audioMimeType};base64,${audioBase64}`,
+        text: text.trim()
+      });
+    } catch (apiError) {
+      console.error('LemonFox API error:', apiError.response?.data || apiError.message);
+      
+      // If API call fails, return error but still save to history
+      res.status(500).json({
+        error: 'Failed to convert text to voice',
+        details: apiError.response?.data?.message || apiError.message,
+        // Fallback: return text so frontend can use Web Speech API as backup
+        text: text.trim(),
+        useFallback: true
+      });
+    }
   } catch (error) {
     console.error('Text to voice error:', error);
     res.status(500).json({ error: 'Internal server error' });
