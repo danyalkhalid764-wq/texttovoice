@@ -5,7 +5,7 @@ A modern web application with text-to-speech functionality, user authentication,
 ## Features
 
 - 🔐 User Authentication (Signup & Login)
-- 🎤 Text-to-Voice conversion using Web Speech API
+- 🎤 Text-to-Voice conversion using **LemonFox API** (with Web Speech API fallback)
 - 📝 History tracking of converted texts
 - 💾 SQLite database for data persistence
 - 🚀 Ready for Netlify deployment
@@ -23,6 +23,8 @@ A modern web application with text-to-speech functionality, user authentication,
 - SQLite (better-sqlite3)
 - JWT for authentication
 - bcryptjs for password hashing
+- LemonFox API for text-to-speech
+- axios for HTTP requests
 
 ## Setup Instructions
 
@@ -45,11 +47,14 @@ A modern web application with text-to-speech functionality, user authentication,
    ```
 
 3. **Create environment file:**
-   Create a `.env` file in the root directory:
+   Create a `.env` file in the `server` directory:
    ```
-   VITE_API_URL=http://localhost:3001/api
+   LEMONFOX_API_KEY=VY1c9L5WommkQRzryoKZLgU7zBJg1sPl
    JWT_SECRET=your-secret-key-change-in-production
+   PORT=3001
    ```
+   
+   See `SETUP_ENV.md` for detailed setup instructions.
 
 ### Running Locally
 
@@ -159,8 +164,17 @@ parking-lot/
 
 - The database file (`server/database.sqlite`) will be created automatically on first run
 - For production, change the `JWT_SECRET` to a strong, random string
-- The text-to-voice feature uses the browser's Web Speech API
+- The text-to-voice feature uses **LemonFox API** for high-quality voice synthesis
+- Falls back to browser's Web Speech API if LemonFox API is unavailable
 - SQLite database is included in the repository for Netlify Functions deployment
+- **Important**: Add `LEMONFOX_API_KEY` to Netlify environment variables for deployment
+
+## LemonFox API Integration
+
+This app uses LemonFox API for professional text-to-speech conversion. The API key is already configured.
+
+- See `LEMONFOX_SETUP.md` for detailed API configuration
+- See `SETUP_ENV.md` for quick environment setup
 
 ## License
 

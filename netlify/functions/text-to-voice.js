@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import jwt from 'jsonwebtoken';
+import axios from 'axios';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -89,17 +90,66 @@ export const handler = async (event, context) => {
         };
       }
 
+      const lemonfoxApiKey = process.env.LEMONFOX_API_KEY;
+      if (!lemonfoxApiKey) {
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ error: 'LemonFox API key not configured' }),
+        };
+      }
+
+      // Store in history
       const stmt = db.prepare('INSERT INTO text_to_voice_history (user_id, text) VALUES (?, ?)');
       stmt.run(decoded.userId, text);
 
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          message: 'Text ready for voice conversion',
-          text: text.trim(),
-        }),
-      };
+      try {
+        // Call LemonFox API
+        const lemonfoxResponse = await axios.post(
+          'https://api.lemonfox.ai/v1/tts', // Adjust endpoint if needed
+          {
+            text: text.trim(),
+            voice: 'default',
+            speed: 1.0,
+            format: 'mp3'
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${lemonfoxApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            responseType: 'arraybuffer'
+          }
+        );
+
+        // Convert audio buffer to base64
+        const audioBase64 = Buffer.from(lemonfoxResponse.data).toString('base64');
+        const audioMimeType = lemonfoxResponse.headers['content-type'] || 'audio/mpeg';
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            message: 'Text converted to voice successfully',
+            audio: `data:${audioMimeType};base64,${audioBase64}`,
+            text: text.trim()
+          }),
+        };
+      } catch (apiError) {
+        console.error('LemonFox API error:', apiError.response?.data || apiError.message);
+        
+        // Return fallback response
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            error: 'Failed to convert text to voice',
+            details: apiError.response?.data?.message || apiError.message,
+            text: text.trim(),
+            useFallback: true
+          }),
+        };
+      }
     }
 
     if (action === 'history' && event.httpMethod === 'GET') {

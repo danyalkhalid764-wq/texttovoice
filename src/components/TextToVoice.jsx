@@ -8,6 +8,8 @@ export default function TextToVoice({ user }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [audioElement, setAudioElement] = useState(null);
 
   useEffect(() => {
     loadHistory();
@@ -32,41 +34,77 @@ export default function TextToVoice({ user }) {
 
     setError('');
     setLoading(true);
+    setAudioUrl(null);
+
+    // Stop any currently playing audio
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    }
 
     try {
-      // Save to backend
-      await api.textToVoice(text);
+      // Call backend API which uses LemonFox
+      const response = await api.textToVoice(text);
       
-      // Use Web Speech API for text-to-speech
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        
-        // Configure voice settings
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
+      // Check if we got audio from LemonFox API
+      if (response.audio) {
+        // Use LemonFox audio
+        const audio = new Audio(response.audio);
+        setAudioElement(audio);
+        setAudioUrl(response.audio);
 
-        utterance.onstart = () => {
+        audio.onplay = () => {
           setIsSpeaking(true);
         };
 
-        utterance.onend = () => {
+        audio.onended = () => {
           setIsSpeaking(false);
           loadHistory();
         };
 
-        utterance.onerror = (event) => {
+        audio.onerror = (event) => {
           setIsSpeaking(false);
-          setError('Error occurred while speaking');
-          console.error('Speech synthesis error:', event);
+          setError('Error playing audio');
+          console.error('Audio playback error:', event);
         };
 
-        window.speechSynthesis.speak(utterance);
+        audio.play().catch((err) => {
+          setIsSpeaking(false);
+          setError('Failed to play audio. Please try again.');
+          console.error('Audio play error:', err);
+        });
+      } else if (response.useFallback && response.text) {
+        // Fallback to Web Speech API if LemonFox fails
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(response.text);
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+
+          utterance.onstart = () => {
+            setIsSpeaking(true);
+          };
+
+          utterance.onend = () => {
+            setIsSpeaking(false);
+            loadHistory();
+          };
+
+          utterance.onerror = (event) => {
+            setIsSpeaking(false);
+            setError('Error occurred while speaking');
+            console.error('Speech synthesis error:', event);
+          };
+
+          window.speechSynthesis.speak(utterance);
+        } else {
+          setError('Your browser does not support text-to-speech');
+        }
       } else {
-        setError('Your browser does not support text-to-speech');
+        setError(response.error || 'Failed to convert text to voice');
       }
     } catch (err) {
-      setError('Failed to convert text to voice. Please try again.');
+      setError(err.message || 'Failed to convert text to voice. Please try again.');
       console.error('Text to voice error:', err);
     } finally {
       setLoading(false);
@@ -74,27 +112,80 @@ export default function TextToVoice({ user }) {
   };
 
   const stopSpeaking = () => {
+    // Stop audio playback
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      setIsSpeaking(false);
+    }
+    // Stop Web Speech API (fallback)
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     }
   };
 
-  const speakFromHistory = (textToSpeak) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
+  const speakFromHistory = async (textToSpeak) => {
+    // Stop any currently playing audio
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    }
 
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        setError('Error occurred while speaking');
-      };
+    try {
+      // Try to get audio from LemonFox API
+      const response = await api.textToVoice(textToSpeak);
+      
+      if (response.audio) {
+        const audio = new Audio(response.audio);
+        setAudioElement(audio);
 
-      window.speechSynthesis.speak(utterance);
+        audio.onplay = () => setIsSpeaking(true);
+        audio.onended = () => setIsSpeaking(false);
+        audio.onerror = () => {
+          setIsSpeaking(false);
+          setError('Error playing audio');
+        };
+
+        audio.play().catch((err) => {
+          setIsSpeaking(false);
+          console.error('Audio play error:', err);
+        });
+      } else {
+        // Fallback to Web Speech API
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(textToSpeak);
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+
+          utterance.onstart = () => setIsSpeaking(true);
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => {
+            setIsSpeaking(false);
+            setError('Error occurred while speaking');
+          };
+
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+    } catch (err) {
+      // Fallback to Web Speech API on error
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          setError('Error occurred while speaking');
+        };
+
+        window.speechSynthesis.speak(utterance);
+      }
     }
   };
 
@@ -129,6 +220,11 @@ export default function TextToVoice({ user }) {
             disabled={isSpeaking}
           />
           {error && <div className="error-message">{error}</div>}
+          {audioUrl && (
+            <div style={{ marginTop: '15px', marginBottom: '15px' }}>
+              <audio controls src={audioUrl} style={{ width: '100%' }} />
+            </div>
+          )}
           <div className="button-group">
             <button
               className="btn-primary"
