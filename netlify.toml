@@ -3,7 +3,7 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "20"
 
 # API routes - redirect to Netlify Functions
 # Netlify Functions are accessible at /.netlify/functions/function-name
