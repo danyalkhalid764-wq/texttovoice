@@ -9,8 +9,13 @@ const __dirname = dirname(__filename);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+// For Netlify Functions, use /tmp directory (writable but ephemeral)
+// Note: Data will be lost between deployments. For production, use a cloud database.
 const getDb = () => {
-  const dbPath = join(__dirname, '../../server/database.sqlite');
+  // Use /tmp in serverless environment, otherwise use server directory
+  const dbPath = process.env.NETLIFY 
+    ? '/tmp/database.sqlite'
+    : join(__dirname, '../../server/database.sqlite');
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
   return db;
